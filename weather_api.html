@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>串接天氣 API 練習</title>
+  <style>
+    .title {
+      text-align: center;
+      width: 100%;
+    }
+
+    #forecast-next-36-hours {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .pop-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 200px;
+      height: 100px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      margin: 10px;
+      padding: 10px;
+    }
+
+    .pop-img {
+      width: 50px;
+      height: 50px;
+    }
+
+    .pop-percentage {
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .pop-time-range {
+      font-size: 12px;
+    }
+
+    .tmp-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 200px;
+      height: 100px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      margin: 10px;
+      padding: 10px;
+    }
+
+    .tmp-img {
+      width: 50px;
+      height: 50px;
+    }
+
+    .tmp-value {
+      font-size: 20px;
+      font-weight: bold;
+    }
+    .tmp-time-range {
+      font-size: 12px;
+    }
+  </style>
+
+<script>
+  const TARGET_CITY = '高雄市';
+
+  function getBetterTimeDisplayFromIdx(idx) {
+    switch(idx) {
+      case 0:
+        return '午夜至清晨';
+      case 1:
+        return '白天至傍晚';
+      case 2:
+        return '晚上至午夜';
+    }
+  }
+
+  window.addEventListener('load', async () => {
+    // 先到中央氣象局申請一組 API Key：https://opendata.cwb.gov.tw/index
+    // 這是可以存取 API 的金鑰，請勿公開
+    const apiKey = '你的金鑰';
+
+    const baseURL = 'https://opendata.cwb.gov.tw/api';
+
+    // 這裡有很多關於氣象的資料可以免費取得哦～
+    // https://opendata.cwb.gov.tw/dist/opendata-swagger.html
+    const routeNext36Hours = '/v1/rest/datastore/F-C0032-001';
+
+    const response = await fetch(`${baseURL}${routeNext36Hours}?${
+      new URLSearchParams({
+        Authorization: apiKey,
+        format: 'JSON',
+        locationName: TARGET_CITY,
+      })
+    }`);
+
+    const data = await response.json();
+
+    // 先看看回傳資料格式長怎樣
+    console.log({ data });
+
+    const { records } = data;
+    const { location } = records;
+    const [targetCity] = location;
+    const { weatherElement } = targetCity;
+
+    const targetDiv = document.getElementById('forecast-next-36-hours');
+
+    // 建立一個標題
+    const title = document.createElement('h2');
+    title.setAttribute('class', 'title');
+    title.innerText = `${targetCity.locationName}未來 36 小時天氣預報`;
+    targetDiv.appendChild(title);
+
+
+
+    /****************************
+    *  取出並顯示最高溫與最低溫資訊
+    *****************************/
+    const minT = weatherElement[2];
+    const maxT = weatherElement[4];
+
+    // 我已經知道 API 就是會回傳三個時間點的資料，所以我這邊迴圈寫死（未來如果 API 有變動，這邊就要改）
+    for(let i = 0; i < 3; i++) {
+      const minTObj = minT.time[i];
+      const maxTObj = maxT.time[i];
+
+      const { startTime, endTime, parameter } = minTObj;
+      const { parameterName: minTmp } = parameter;
+
+      const { startTime: startTime2, endTime: endTime2, parameter: parameter2 } = maxTObj;
+      const { parameterName: maxTmp } = parameter2;
+
+      // 建立一個最低溫與最高溫卡片 div
+      const tempCard = document.createElement('div');
+      tempCard.setAttribute('class', 'tmp-card');
+
+      // 建立圖片的 img tag
+      const tempImg = document.createElement('img');
+      tempImg.setAttribute('class', 'tmp-img');
+      if (maxTmp > 32) {
+        tempImg.src = 'img/weather/hot.png';
+      } else if (maxTmp > 27) {
+        tempImg.src = 'img/weather/cool.png';
+      } else if (maxTmp > 22) {
+        tempImg.src = 'img/weather/comfort.png';
+      } else if (maxTmp > 15) {
+        tempImg.src = 'img/weather/cold.png';
+      }
+
+      // 建立顯示溫度文字的 div
+      const tempValue = document.createElement('div');
+      tempValue.setAttribute('class', 'tmp-value');
+      tempValue.innerText = `${minTmp} °C ~ ${maxTmp} °C`;
+
+      // 建立預測時間文字的 div
+      const tempTimeRange = document.createElement('div');
+      tempTimeRange.setAttribute('class', 'tmp-time-range');
+      tempTimeRange.innerText = getBetterTimeDisplayFromIdx(i);
+
+      // 將資訊組裝到卡片中
+      tempCard.appendChild(tempImg);
+      tempCard.appendChild(tempValue);
+      tempCard.appendChild(tempTimeRange);
+
+      // 將卡片放到 targetDiv 裡面
+      targetDiv.appendChild(tempCard);
+    }
+
+    // 加入分隔線
+    const divHr = document.createElement('div');
+    divHr.style.width = '100%';
+    targetDiv.appendChild(divHr);
+
+     /****************************
+     *  取出並顯示降雨機率資訊
+     *****************************/
+    const pop = weatherElement[1];
+
+    console.log({pop})
+
+    // 把降雨機率資訊卡片，加入到 targetDiv 裡面
+    for(let i = 0; i < pop.time.length; i++) {
+      const timeObj = pop.time[i];
+
+      // 取出時間內含的資料
+      const {startTime, endTime, parameter} = timeObj;
+
+      // 取出百分比數值
+      const { parameterName } = parameter;
+
+      // 建立一個降雨機率卡片 div
+      const popCard = document.createElement('div');
+      // 給定一個 class name 方便幫它化妝
+      popCard.setAttribute('class', 'pop-card');
+
+      // 建立圖片的 img tag
+      const popImg = document.createElement('img');
+      popImg.setAttribute('class', 'pop-img');
+      if (parameterName > 70) {
+        popImg.src = 'img/weather/heavy-rain.png';
+      } else if (parameterName > 50) {
+        popImg.src = 'img/weather/mid-rain.png';
+      } else if (parameterName > 0) {
+        popImg.src = 'img/weather/light-rain.png';
+      } else {
+        popImg.src = 'img/weather/no-rain.png';
+      }
+
+      // 建立顯示百分比文字的 div
+      const popPercentage = document.createElement('div');
+      popPercentage.setAttribute('class', 'pop-percentage');
+      popPercentage.innerText = `${parameterName}%`;
+
+      // 建立預測時間文字的 div
+      const popTimeRange = document.createElement('div');
+      popTimeRange.setAttribute('class', 'pop-time-range');
+      // popTimeRange.innerText = `${startTime} ~ ${endTime}`;
+      // 更友善的顯示方式
+      popTimeRange.innerText = getBetterTimeDisplayFromIdx(i);
+
+      // 將資訊組裝到卡片中
+      popCard.appendChild(popImg);
+      popCard.appendChild(popPercentage);
+      popCard.appendChild(popTimeRange);
+
+      // 將卡片放到 targetDiv 裡面
+      targetDiv.appendChild(popCard);
+    }
+
+    
+  })
+</script>
+</head>
+
+<body>
+  <div id="forecast-next-36-hours"></div>
+</body>
+</html>
